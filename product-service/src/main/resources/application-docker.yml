@@ -1,0 +1,34 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: ${PRODUCT_DB_URL:jdbc:postgresql://product-db:5432/productdb}
+    username: ${PRODUCT_DB_USERNAME:postgres}
+    password: ${PRODUCT_DB_PASSWORD:postgres}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:product-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.value.default.type: com.migros.casestudy.product.event.BarcodeGeneratedEvent
+        spring.json.trusted.packages: com.migros.casestudy.product.event
+
+clients:
+  category-service:
+    url: ${CATEGORY_SERVICE_URL:http://category-service:8083}
+  barcode-service:
+    url: ${BARCODE_SERVICE_URL:http://barcode-service:8082}
+
+app:
+  kafka:
+    topics:
+      barcode-events: ${BARCODE_EVENTS_TOPIC:barcode-events}

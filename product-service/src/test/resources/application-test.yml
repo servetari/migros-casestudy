@@ -1,0 +1,22 @@
+server:
+  port: 0
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  kafka:
+    listener:
+      auto-startup: false
+
+clients:
+  category-service:
+    url: http://localhost:8083
+  barcode-service:
+    url: http://localhost:8082
+
+app:
+  kafka:
+    topics:
+      barcode-events: barcode-events

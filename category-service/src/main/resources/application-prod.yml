@@ -1,0 +1,6 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+logging:
+  level:
+    com.migros.casestudy.category: info

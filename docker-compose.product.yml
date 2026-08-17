@@ -1,0 +1,120 @@
+services:
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: standalone-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c 'echo > /dev/tcp/localhost/9092'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - product-network
+    restart: unless-stopped
+
+  product-db:
+    image: postgres:16-alpine
+    container_name: standalone-product-db
+    environment:
+      POSTGRES_DB: productdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - standalone-product-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d productdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - product-network
+
+  barcode-db:
+    image: postgres:16-alpine
+    container_name: standalone-barcode-db
+    environment:
+      POSTGRES_DB: barcodedb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - standalone-barcode-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d barcodedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - product-network
+
+  barcode-service:
+    build:
+      context: ./barcode-service
+      dockerfile: Dockerfile
+    container_name: standalone-barcode-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      BARCODE_DB_URL: jdbc:postgresql://barcode-db:5432/barcodedb
+      BARCODE_DB_USERNAME: postgres
+      BARCODE_DB_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8082:8082"
+    depends_on:
+      barcode-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - product-network
+
+  product-service:
+    build:
+      context: ./product-service
+      dockerfile: Dockerfile
+    container_name: standalone-product-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PRODUCT_DB_URL: jdbc:postgresql://product-db:5432/productdb
+      PRODUCT_DB_USERNAME: postgres
+      PRODUCT_DB_PASSWORD: postgres
+      CATEGORY_SERVICE_URL: http://host.docker.internal:8083
+      BARCODE_SERVICE_URL: http://barcode-service:8082
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8081:8081"
+    depends_on:
+      product-db:
+        condition: service_healthy
+      barcode-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    networks:
+      - product-network
+    restart: unless-stopped
+
+volumes:
+  standalone-product-db-data:
+  standalone-barcode-db-data:
+
+networks:
+  product-network:
+    driver: bridge
